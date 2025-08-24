@@ -4,6 +4,7 @@ import base64
 import requests
 import time
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ---------------- CONFIG ----------------
 GITHUB_USERNAME = "kailesh-waran-13"
@@ -19,8 +20,8 @@ MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
 MAX_RETRIES = 3
 RETRY_DELAY = 5
 SCAN_FOLDERS = [os.path.expanduser("~/LabFiles")]  # Only scan lab files
-
 STATE_FILE = "uploaded_files.json"  # Tracks uploaded files
+MAX_THREADS = 5  # Number of concurrent uploads
 
 # ---------------- SYSTEM INFO ----------------
 hostname = socket.gethostname()
@@ -80,6 +81,15 @@ def get_existing_files(username, token, repo, folder=""):
                 existing.add(item["name"])
     return existing
 
+def handle_rate_limit(resp):
+    if resp.status_code == 403:
+        reset_time = int(resp.headers.get("X-RateLimit-Reset", time.time() + 60))
+        wait_seconds = max(reset_time - int(time.time()), 1)
+        print(f"[RATE LIMIT] Hit GitHub API limit. Waiting {wait_seconds} seconds...")
+        time.sleep(wait_seconds)
+        return True
+    return False
+
 def upload_file(username, token, repo, branch, folder, filepath, existing_files, uploaded_files):
     filename = os.path.basename(filepath)
     
@@ -105,6 +115,8 @@ def upload_file(username, token, repo, branch, folder, filepath, existing_files,
             uploaded_files.add(filepath)
             save_state(uploaded_files)
             return "Uploaded"
+        elif handle_rate_limit(resp):
+            continue
         else:
             print(f"[FAIL] {filename} | Attempt {attempt} failed | Status: {resp.status_code}")
             if attempt < MAX_RETRIES:
@@ -123,6 +135,14 @@ def scan_files():
                         files_dict[category].append(filepath)
     return files_dict
 
+def threaded_upload(category, file_list, existing_files, uploaded_files):
+    with ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
+        futures = []
+        for fpath in file_list:
+            futures.append(executor.submit(upload_file, GITHUB_USERNAME, GITHUB_TOKEN, repo_name, BRANCH, category, fpath, existing_files, uploaded_files))
+        for future in as_completed(futures):
+            future.result()  # Wait for completion
+
 # ---------------- MAIN ----------------
 def main():
     uploaded_files = load_state()
@@ -131,11 +151,11 @@ def main():
     
     for category, file_list in files_to_upload.items():
         existing_files = get_existing_files(GITHUB_USERNAME, GITHUB_TOKEN, repo_name, category)
-        for fpath in file_list:
-            upload_file(GITHUB_USERNAME, GITHUB_TOKEN, repo_name, BRANCH, category, fpath, existing_files, uploaded_files)
+        threaded_upload(category, file_list, existing_files, uploaded_files)
     
     print("[INFO] All files processed successfully.")
 
 if __name__ == "__main__":
     main()
+
 
