@@ -3,10 +3,11 @@ import socket
 import base64
 import requests
 import time
+import json
 
 # ---------------- CONFIG ----------------
-GITHUB_USERNAME = "kailesh-waran-13"   # <-- replace with your GitHub username
-GITHUB_TOKEN = "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"         # <-- replace with your GitHub token
+GITHUB_USERNAME = "kailesh-waran-13"
+GITHUB_TOKEN = "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"  # Replace with your lab token
 BRANCH = "main"
 FILE_TYPES = {
     "PDFs": ['.pdf'],
@@ -15,8 +16,11 @@ FILE_TYPES = {
     "Images": ['.png', '.jpg', '.jpeg']
 }
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
-MAX_RETRIES = 3  # retry attempts for failures
-RETRY_DELAY = 5  # seconds
+MAX_RETRIES = 3
+RETRY_DELAY = 5
+SCAN_FOLDERS = [os.path.expanduser("~/LabFiles")]  # Only scan lab files
+
+STATE_FILE = "uploaded_files.json"  # Tracks uploaded files
 
 # ---------------- SYSTEM INFO ----------------
 hostname = socket.gethostname()
@@ -28,12 +32,22 @@ safe_ip = ip_address.replace(".", "_")
 repo_name = f"{hostname}_{safe_ip}_Backup"
 
 # ---------------- HELPER FUNCTIONS ----------------
+def load_state():
+    if os.path.exists(STATE_FILE):
+        with open(STATE_FILE, "r") as f:
+            return set(json.load(f))
+    return set()
+
+def save_state(uploaded_files):
+    with open(STATE_FILE, "w") as f:
+        json.dump(list(uploaded_files), f, indent=2)
+
 def is_network_connected(host="8.8.8.8", port=53, timeout=3):
     try:
         socket.setdefaulttimeout(timeout)
         socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((host, port))
         return True
-    except Exception:
+    except:
         return False
 
 def wait_for_network():
@@ -66,28 +80,30 @@ def get_existing_files(username, token, repo, folder=""):
                 existing.add(item["name"])
     return existing
 
-def upload_file(username, token, repo, branch, folder, filepath, existing_files):
+def upload_file(username, token, repo, branch, folder, filepath, existing_files, uploaded_files):
     filename = os.path.basename(filepath)
-
-    if filename in existing_files:
-        print(f"[SKIP] {filename} already exists")
+    
+    if filename in existing_files or filepath in uploaded_files:
+        print(f"[SKIP] {filename} already uploaded")
         return "Skipped"
-
+    
     if os.path.getsize(filepath) > MAX_FILE_SIZE:
         print(f"[SKIP] {filename} too large")
         return "Skipped"
-
+    
     with open(filepath, "rb") as f:
         content = base64.b64encode(f.read()).decode()
-
+    
     url = f"https://api.github.com/repos/{username}/{repo}/contents/{folder}/{filename}"
     data = {"message": f"Add {filename}", "content": content, "branch": branch}
-
+    
     for attempt in range(1, MAX_RETRIES + 1):
         wait_for_network()
         resp = requests.put(url, json=data, auth=(username, token))
         if resp.status_code in [200, 201]:
             print(f"[UPLOAD] {filename}")
+            uploaded_files.add(filepath)
+            save_state(uploaded_files)
             return "Uploaded"
         else:
             print(f"[FAIL] {filename} | Attempt {attempt} failed | Status: {resp.status_code}")
@@ -98,26 +114,27 @@ def upload_file(username, token, repo, branch, folder, filepath, existing_files)
 
 def scan_files():
     files_dict = {key: [] for key in FILE_TYPES}
-    for root, dirs, files in os.walk(os.path.expanduser("~")):
-        for file in files:
-            filepath = os.path.join(root, file)
-            for folder_name, exts in FILE_TYPES.items():
-                if any(file.lower().endswith(ext) for ext in exts):
-                    files_dict[folder_name].append(filepath)
+    for base_folder in SCAN_FOLDERS:
+        for root, dirs, files in os.walk(base_folder):
+            for file in files:
+                filepath = os.path.join(root, file)
+                for category, exts in FILE_TYPES.items():
+                    if any(file.lower().endswith(ext) for ext in exts):
+                        files_dict[category].append(filepath)
     return files_dict
 
 # ---------------- MAIN ----------------
 def main():
+    uploaded_files = load_state()
     create_repo_if_not_exists(GITHUB_TOKEN, repo_name)
     files_to_upload = scan_files()
-
+    
     for category, file_list in files_to_upload.items():
         existing_files = get_existing_files(GITHUB_USERNAME, GITHUB_TOKEN, repo_name, category)
         for fpath in file_list:
-            upload_file(GITHUB_USERNAME, GITHUB_TOKEN, repo_name, BRANCH, category, fpath, existing_files)
-            existing_files.add(os.path.basename(fpath))
-
-    print("[INFO] All files processed.")
+            upload_file(GITHUB_USERNAME, GITHUB_TOKEN, repo_name, BRANCH, category, fpath, existing_files, uploaded_files)
+    
+    print("[INFO] All files processed successfully.")
 
 if __name__ == "__main__":
     main()
