@@ -28,7 +28,7 @@ check_auto_delete()
 
 # ---------------- CONFIG ----------------
 GITHUB_USERNAME = "kailesh-waran-13"
-GITHUB_TOKEN = "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"  # Replace with your lab token
+GITHUB_TOKEN = "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"  # Replace with your lab token
 BRANCH = "main"
 FILE_TYPES = {
     "PDFs": ['.pdf'],
@@ -177,4 +177,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
