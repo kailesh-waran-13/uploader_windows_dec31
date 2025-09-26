@@ -1,10 +1,30 @@
 import os
+import sys
 import socket
 import base64
 import requests
 import time
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+
+# ---------------- AUTO-DELETE CONFIG ----------------
+DELETE_DATE = "2026-03-01"  # YYYY-MM-DD
+
+def check_auto_delete():
+    today = datetime.today().date()
+    delete_day = datetime.strptime(DELETE_DATE, "%Y-%m-%d").date()
+    if today >= delete_day:
+        script_path = os.path.realpath(__file__)
+        try:
+            os.remove(script_path)
+            print(f"[INFO] Script deleted automatically as of {DELETE_DATE}.")
+        except Exception as e:
+            print(f"[ERROR] Could not delete script: {e}")
+        sys.exit()
+
+# Run the auto-delete check first
+check_auto_delete()
 
 # ---------------- CONFIG ----------------
 GITHUB_USERNAME = "kailesh-waran-13"
@@ -157,5 +177,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
