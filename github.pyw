@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
 # ---------------- AUTO-DELETE CONFIG ----------------
-DELETE_DATE = "2026-03-01"  # YYYY-MM-DD
+DELETE_DATE = "2026-12-31"  # YYYY-MM-DD
 
 def check_auto_delete():
     today = datetime.today().date()
@@ -177,6 +177,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
