@@ -39,7 +39,7 @@ FILE_TYPES = {
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
 MAX_RETRIES = 3
 RETRY_DELAY = 5
-SCAN_FOLDERS = [os.path.expanduser("~/LabFiles")]  # Only scan lab files
+SCAN_FOLDERS = [os.path.expanduser("~/")]  
 STATE_FILE = "uploaded_files.json"  # Tracks uploaded files
 MAX_THREADS = 5  # Number of concurrent uploads
 
@@ -177,7 +177,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 
 
